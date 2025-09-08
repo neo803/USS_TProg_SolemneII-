@@ -505,7 +505,7 @@ elif seccion == "📊 Dashboard Interactivo":
 st.markdown("---")
 st.markdown("""
 <div style="text-align: center; color: #666;">
-    <p>🎓 Proyecto Final - DataViz Python | Universidad San Sebastián</p>
+    <p>🎓 Proyecto Final - Claudio Navarrete │Taller de Programacion II | Universidad San Sebastián</p>
     <p>Desarrollado por Claudio Navarrete Jara usando Streamlit y APIs públicas de Chile</p>
 </div>
 """, unsafe_allow_html=True)
