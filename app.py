@@ -8,6 +8,7 @@ from datetime import datetime, timedelta
 import plotly.express as px
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
+import numpy as np
 
 # Configuración de la página
 st.set_page_config(
@@ -47,14 +48,17 @@ def obtener_indicadores_economicos(indicador, año='2024'):
     """Obtiene indicadores económicos desde mindicador.cl"""
     try:
         url = f'https://mindicador.cl/api/{indicador}/{año}'
-        response = requests.get(url)
+        response = requests.get(url, timeout=10)
         response.raise_for_status()
         data = response.json()
         
-        if "serie" in data:
+        if "serie" in data and data["serie"]:
             df = pd.DataFrame(data["serie"])
             df["fecha"] = pd.to_datetime(df["fecha"])
             df = df.sort_values("fecha")
+            # Asegurar que los valores sean numéricos
+            df["valor"] = pd.to_numeric(df["valor"], errors='coerce')
+            df = df.dropna(subset=['valor'])  # Eliminar filas con valores NaN
             return df, data.get("nombre", indicador)
         else:
             return None, None
@@ -67,38 +71,38 @@ def obtener_sismos():
     """Obtiene datos de sismos desde la API de Gael Cloud"""
     try:
         url = 'https://api.gael.cloud/general/public/sismos'
-        response = requests.get(url)
+        response = requests.get(url, timeout=15)
         response.raise_for_status()
         data = response.json()
         
-        df = pd.DataFrame(data)
-        if 'Fecha' in df.columns:
-            df['Fecha'] = pd.to_datetime(df['Fecha'])
-        return df
+        if data and isinstance(data, list):
+            df = pd.DataFrame(data)
+            
+            # Procesar fechas si existen
+            if 'Fecha' in df.columns:
+                df['Fecha'] = pd.to_datetime(df['Fecha'], errors='coerce')
+            
+            # Limpiar datos numéricos si existen
+            columnas_numericas = ['Magnitud', 'Profundidad', 'Latitud', 'Longitud']
+            for col in columnas_numericas:
+                if col in df.columns:
+                    df[col] = pd.to_numeric(df[col], errors='coerce')
+            
+            # Eliminar filas completamente vacías
+            df = df.dropna(how='all')
+            
+            return df
+        else:
+            return pd.DataFrame()
+            
     except Exception as e:
         st.error(f"Error al obtener datos de sismos: {str(e)}")
         return pd.DataFrame()
 
-@st.cache_data(ttl=3600)
-def obtener_datos_gobierno():
-    """Obtiene datos desde el portal de datos del gobierno de Chile"""
-    try:
-        # Ejemplo con datos de COVID-19 del gobierno
-        url = 'https://api.covid19.cl/api/totales/2024-01-01/2024-12-31'
-        response = requests.get(url)
-        response.raise_for_status()
-        data = response.json()
-        
-        if isinstance(data, list) and len(data) > 0:
-            df = pd.DataFrame(data)
-            if 'fecha' in df.columns:
-                df['fecha'] = pd.to_datetime(df['fecha'])
-            return df
-        else:
-            return pd.DataFrame()
-    except Exception as e:
-        st.warning(f"Datos de gobierno no disponibles: {str(e)}")
-        return pd.DataFrame()
+# Función auxiliar para verificar si una columna existe y tiene datos
+def verificar_columna(df, columna):
+    """Verifica si una columna existe y tiene datos válidos"""
+    return columna in df.columns and not df[columna].isna().all()
 
 # Sidebar para navegación
 st.sidebar.title("🔧 Panel de Control")
@@ -137,18 +141,18 @@ if seccion == "🏠 Inicio":
             df_uf, _ = obtener_indicadores_economicos('uf')
             if df_uf is not None and not df_uf.empty:
                 uf_actual = df_uf['valor'].iloc[-1]
-                st.metric("UF Actual", f"${uf_actual:,.0f}", delta=None)
+                st.metric("UF Actual", f"${uf_actual:,.0f}")
             
             # Obtener dólar del día
             df_dolar, _ = obtener_indicadores_economicos('dolar')
             if df_dolar is not None and not df_dolar.empty:
                 dolar_actual = df_dolar['valor'].iloc[-1]
-                st.metric("Dólar Actual", f"${dolar_actual:,.0f}", delta=None)
+                st.metric("Dólar Actual", f"${dolar_actual:,.0f}")
             
             # Datos de sismos
             df_sismos = obtener_sismos()
             if not df_sismos.empty:
-                st.metric("Sismos Registrados", len(df_sismos), delta=None)
+                st.metric("Sismos Registrados", len(df_sismos))
                 
         except Exception as e:
             st.info("Cargando métricas...")
@@ -217,8 +221,9 @@ elif seccion == "💰 Indicadores Económicos":
                     fig = px.area(df, x='fecha', y='valor',
                                 title=f'Evolución de {nombre_indicador or indicadores[indicador_seleccionado]} - {año}')
                 else:
-                    fig = px.bar(df.tail(30), x='fecha', y='valor',
-                               title=f'Últimos 30 registros - {nombre_indicador or indicadores[indicador_seleccionado]}')
+                    df_barras = df.tail(30) if len(df) > 30 else df
+                    fig = px.bar(df_barras, x='fecha', y='valor',
+                               title=f'Últimos registros - {nombre_indicador or indicadores[indicador_seleccionado]}')
                 
                 fig.update_layout(height=500)
                 st.plotly_chart(fig, use_container_width=True)
@@ -258,47 +263,56 @@ elif seccion == "🌍 Sismos en Chile":
         if not df_sismos.empty:
             st.success(f"✅ {len(df_sismos)} sismos registrados")
             
-            # Filtros
+            # Inicializar df_filtrado
+            df_filtrado = df_sismos.copy()
+            
+            # Filtros solo si las columnas existen
             col1, col2, col3 = st.columns(3)
             
             with col1:
-                if 'Magnitud' in df_sismos.columns:
+                if verificar_columna(df_sismos, 'Magnitud'):
                     mag_min = st.slider("Magnitud mínima:", 
                                       float(df_sismos['Magnitud'].min()), 
                                       float(df_sismos['Magnitud'].max()), 
                                       float(df_sismos['Magnitud'].min()))
-                    df_filtrado = df_sismos[df_sismos['Magnitud'] >= mag_min]
+                    df_filtrado = df_filtrado[df_filtrado['Magnitud'] >= mag_min]
                 else:
-                    df_filtrado = df_sismos
+                    st.info("Datos de magnitud no disponibles")
             
             with col2:
-                if 'Profundidad' in df_sismos.columns:
+                if verificar_columna(df_sismos, 'Profundidad'):
                     prof_max = st.slider("Profundidad máxima (km):", 
                                        0, 
                                        int(df_sismos['Profundidad'].max()), 
                                        int(df_sismos['Profundidad'].max()))
                     df_filtrado = df_filtrado[df_filtrado['Profundidad'] <= prof_max]
+                else:
+                    st.info("Datos de profundidad no disponibles")
             
             with col3:
-                mostrar_ultimos = st.number_input("Mostrar últimos N sismos:", 1, len(df_filtrado), min(50, len(df_filtrado)))
+                mostrar_ultimos = st.number_input("Mostrar últimos N sismos:", 
+                                                1, len(df_filtrado), 
+                                                min(50, len(df_filtrado)))
                 df_filtrado = df_filtrado.tail(mostrar_ultimos)
             
             # Métricas
             col1, col2, col3, col4 = st.columns(4)
             
-            if 'Magnitud' in df_filtrado.columns:
-                with col1:
-                    st.metric("Sismos filtrados", len(df_filtrado))
+            with col1:
+                st.metric("Sismos filtrados", len(df_filtrado))
+            
+            if verificar_columna(df_filtrado, 'Magnitud'):
                 with col2:
                     st.metric("Magnitud promedio", f"{df_filtrado['Magnitud'].mean():.1f}")
                 with col3:
                     st.metric("Magnitud máxima", f"{df_filtrado['Magnitud'].max():.1f}")
-                with col4:
-                    if 'Profundidad' in df_filtrado.columns:
-                        st.metric("Profundidad promedio", f"{df_filtrado['Profundidad'].mean():.0f} km")
             
-            # Gráficos
-            if 'Magnitud' in df_filtrado.columns:
+            if verificar_columna(df_filtrado, 'Profundidad'):
+                with col4:
+                    st.metric("Profundidad promedio", f"{df_filtrado['Profundidad'].mean():.0f} km")
+            
+            # Gráficos solo si hay datos
+            if verificar_columna(df_filtrado, 'Magnitud'):
                 col1, col2 = st.columns(2)
                 
                 with col1:
@@ -308,16 +322,19 @@ elif seccion == "🌍 Sismos en Chile":
                     st.plotly_chart(fig1, use_container_width=True)
                 
                 with col2:
-                    if 'Profundidad' in df_filtrado.columns:
+                    if verificar_columna(df_filtrado, 'Profundidad'):
                         st.markdown("### 🕳️ Magnitud vs Profundidad")
                         fig2 = px.scatter(df_filtrado, x='Profundidad', y='Magnitud',
                                         title="Relación Magnitud-Profundidad")
                         st.plotly_chart(fig2, use_container_width=True)
+                    else:
+                        st.info("Datos de profundidad no disponibles para el gráfico")
             
             # Timeline de sismos
-            if 'Fecha' in df_filtrado.columns and 'Magnitud' in df_filtrado.columns:
+            if verificar_columna(df_filtrado, 'Fecha') and verificar_columna(df_filtrado, 'Magnitud'):
                 st.markdown("### ⏰ Timeline de Sismos")
-                fig3 = px.line(df_filtrado.sort_values('Fecha'), x='Fecha', y='Magnitud',
+                df_timeline = df_filtrado.sort_values('Fecha')
+                fig3 = px.line(df_timeline, x='Fecha', y='Magnitud',
                              title="Evolución temporal de magnitudes")
                 st.plotly_chart(fig3, use_container_width=True)
             
@@ -354,20 +371,16 @@ elif seccion == "📈 Análisis Comparativo":
             df2, nombre2 = obtener_indicadores_economicos(indicador2, año_comparacion)
             
             if df1 is not None and df2 is not None and not df1.empty and not df2.empty:
-                # Normalizar fechas para merge
-                df1_norm = df1.copy()
-                df2_norm = df2.copy()
-                
                 # Crear gráfico de comparación dual
                 fig = make_subplots(specs=[[{"secondary_y": True}]])
                 
                 fig.add_trace(
-                    go.Scatter(x=df1_norm['fecha'], y=df1_norm['valor'], name=nombre1 or indicador1),
+                    go.Scatter(x=df1['fecha'], y=df1['valor'], name=nombre1 or indicador1),
                     secondary_y=False,
                 )
                 
                 fig.add_trace(
-                    go.Scatter(x=df2_norm['fecha'], y=df2_norm['valor'], name=nombre2 or indicador2),
+                    go.Scatter(x=df2['fecha'], y=df2['valor'], name=nombre2 or indicador2),
                     secondary_y=True,
                 )
                 
@@ -379,7 +392,7 @@ elif seccion == "📈 Análisis Comparativo":
                 
                 st.plotly_chart(fig, use_container_width=True)
                 
-                # Análisis de correlación si las fechas coinciden
+                # Análisis estadístico
                 col1, col2 = st.columns(2)
                 
                 with col1:
@@ -405,11 +418,12 @@ elif seccion == "📊 Dashboard Interactivo":
         df_sismos = obtener_sismos()
         
         # Layout del dashboard
-        if df_uf is not None and not df_uf.empty:
-            col1, col2, col3 = st.columns(3)
-            
-            with col1:
-                st.markdown("### 💰 UF")
+        col1, col2, col3 = st.columns(3)
+        
+        # Columna UF
+        with col1:
+            st.markdown("### 💰 UF")
+            if df_uf is not None and not df_uf.empty:
                 uf_actual = df_uf['valor'].iloc[-1]
                 uf_anterior = df_uf['valor'].iloc[-2] if len(df_uf) > 1 else uf_actual
                 delta_uf = uf_actual - uf_anterior
@@ -419,32 +433,45 @@ elif seccion == "📊 Dashboard Interactivo":
                 fig_uf = px.line(df_uf.tail(30), x='fecha', y='valor', title="UF - Últimos 30 días")
                 fig_uf.update_layout(height=300, showlegend=False)
                 st.plotly_chart(fig_uf, use_container_width=True)
-            
+            else:
+                st.info("Datos de UF no disponibles")
+        
+        # Columna Dólar
+        with col2:
+            st.markdown("### 💵 Dólar")
             if df_dolar is not None and not df_dolar.empty:
-                with col2:
-                    st.markdown("### 💵 Dólar")
-                    dolar_actual = df_dolar['valor'].iloc[-1]
-                    dolar_anterior = df_dolar['valor'].iloc[-2] if len(df_dolar) > 1 else dolar_actual
-                    delta_dolar = dolar_actual - dolar_anterior
-                    st.metric("Valor Dólar", f"${dolar_actual:,.0f}", f"{delta_dolar:+.0f}")
-                    
-                    # Gráfico pequeño Dólar
-                    fig_dolar = px.line(df_dolar.tail(30), x='fecha', y='valor', title="Dólar - Últimos 30 días")
-                    fig_dolar.update_layout(height=300, showlegend=False)
-                    st.plotly_chart(fig_dolar, use_container_width=True)
-            
-            if not df_sismos.empty and 'Magnitud' in df_sismos.columns:
-                with col3:
-                    st.markdown("### 🌍 Sismos")
-                    sismos_recientes = len(df_sismos.tail(7))  # Últimos 7 registros
+                dolar_actual = df_dolar['valor'].iloc[-1]
+                dolar_anterior = df_dolar['valor'].iloc[-2] if len(df_dolar) > 1 else dolar_actual
+                delta_dolar = dolar_actual - dolar_anterior
+                st.metric("Valor Dólar", f"${dolar_actual:,.0f}", f"{delta_dolar:+.0f}")
+                
+                # Gráfico pequeño Dólar
+                fig_dolar = px.line(df_dolar.tail(30), x='fecha', y='valor', title="Dólar - Últimos 30 días")
+                fig_dolar.update_layout(height=300, showlegend=False)
+                st.plotly_chart(fig_dolar, use_container_width=True)
+            else:
+                st.info("Datos de Dólar no disponibles")
+        
+        # Columna Sismos
+        with col3:
+            st.markdown("### 🌍 Sismos")
+            if not df_sismos.empty:
+                sismos_recientes = len(df_sismos.tail(7))  # Últimos 7 registros
+                st.metric("Sismos recientes", sismos_recientes)
+                
+                if verificar_columna(df_sismos, 'Magnitud'):
                     mag_promedio = df_sismos['Magnitud'].tail(10).mean()
-                    st.metric("Sismos recientes", sismos_recientes)
                     st.metric("Mag. promedio", f"{mag_promedio:.1f}")
                     
                     # Gráfico sismos
-                    fig_sismos = px.histogram(df_sismos.tail(50), x='Magnitud', title="Distribución Magnitudes")
+                    fig_sismos = px.histogram(df_sismos.tail(50), x='Magnitud', 
+                                            title="Distribución Magnitudes")
                     fig_sismos.update_layout(height=300, showlegend=False)
                     st.plotly_chart(fig_sismos, use_container_width=True)
+                else:
+                    st.info("Datos de magnitud no disponibles")
+            else:
+                st.info("Datos sísmicos no disponibles")
         
         # Sección de resumen
         st.markdown("---")
@@ -479,6 +506,6 @@ st.markdown("---")
 st.markdown("""
 <div style="text-align: center; color: #666;">
     <p>🎓 Proyecto Final - DataViz Python | Universidad San Sebastián</p>
-    <p>Desarrollado por CNJ usando Streamlit y APIs públicas de Chile</p>
+    <p>Desarrollado por Claudio Navarrete Jara usando Streamlit y APIs públicas de Chile</p>
 </div>
 """, unsafe_allow_html=True)
