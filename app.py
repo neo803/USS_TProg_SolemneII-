@@ -12,7 +12,7 @@ import numpy as np
 
 # Configuración de la página
 st.set_page_config(
-    page_title="DataViz Chile - Análisis de Datos Públicos",
+    page_title="Proyecto Final - DataViz Python Lab: Construyendo Interfaces de Datos Interactivas - Análisis de Datos Públicos",
     page_icon="📊",
     layout="wide",
     initial_sidebar_state="expanded"
@@ -40,11 +40,11 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # Título principal
-st.markdown('<h1 class="main-header">📊 DataViz Chile - Análisis de Datos Públicos</h1>', unsafe_allow_html=True)
+st.markdown('<h1 class="main-header">📊 Proyecto Final - DataViz Python Lab: Construyendo Interfaces de Datos Interactivas - Análisis de Datos Públicos</h1>', unsafe_allow_html=True)
 
 # Funciones para obtener datos de APIs
 @st.cache_data(ttl=3600)  # Cache por 1 hora
-def obtener_indicadores_economicos(indicador, año='2024'):
+def obtener_indicadores_economicos(indicador, año='2025'):
     """Obtiene indicadores económicos desde mindicador.cl"""
     try:
         url = f'https://mindicador.cl/api/{indicador}/{año}'
@@ -112,7 +112,7 @@ seccion = st.sidebar.selectbox(
 )
 
 if seccion == "🏠 Inicio":
-    st.markdown("## Bienvenido al Sistema de Análisis de Datos Públicos de Chile")
+    st.markdown("## Sistema de Análisis de Datos Públicos de Chile")
     
     col1, col2 = st.columns(2)
     
@@ -181,7 +181,7 @@ elif seccion == "💰 Indicadores Económicos":
         )
     
     with col2:
-        año = st.selectbox("Año:", ["2024", "2023", "2022", "2021"])
+        año = st.selectbox("Año:", ["2025", "2024", "2023", "2022"])
     
     with col3:
         tipo_grafico = st.selectbox("Tipo de gráfico:", ["Línea", "Area", "Barras"])
