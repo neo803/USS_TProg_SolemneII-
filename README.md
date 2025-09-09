@@ -104,14 +104,7 @@ dataviz-chile/
 ├── app.py                 # Aplicación principal de Streamlit
 ├── requirements.txt       # Dependencias del proyecto
 ├── README.md             # Documentación del proyecto
-├── api_examples/         # Ejemplos de uso de APIs
-│   ├── indicador.py      # API de indicadores básica
-│   ├── indicador3.py     # API de indicadores mejorada
-│   ├── sismos.py         # API de sismos
-│   └── weather.py        # API del clima
-└── docs/                 # Documentación adicional
-    └── proyecto_final.pdf # Especificaciones del proyecto
-```
+├── 
 
 ## 🔄 APIs Utilizadas
 
