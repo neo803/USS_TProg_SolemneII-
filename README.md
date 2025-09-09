@@ -1,4 +1,4 @@
-# DataViz Chile - Análisis de Datos Públicos 📊
+# Taller de Programación II - Análisis de Datos Públicos 📊
 
 ## Descripción del Proyecto
 
@@ -36,7 +36,7 @@ Este proyecto desarrolla una aplicación web interactiva utilizando Python y Str
 
 1. **Clonar el repositorio**
    ```bash
-   git clone https://github.com/tu-usuario/dataviz-chile.git
+   git clone https://github.com/neo803/USS_TProg_SolemneII-
    cd dataviz-chile
    ```
 
@@ -64,6 +64,7 @@ Este proyecto desarrolla una aplicación web interactiva utilizando Python y Str
 5. **Abrir en el navegador**
    - La aplicación se abrirá automáticamente en `http://localhost:8501`
    - Si no se abre automáticamente, visita la URL manualmente
+   - También esta disponible en: https://solemne2uss.streamlit.app/
 
 ## 📱 Funcionalidades
 
