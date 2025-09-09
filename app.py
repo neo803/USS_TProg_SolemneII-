@@ -44,7 +44,7 @@ st.markdown('<h1 class="main-header">📊 Proyecto Final - DataViz Python Lab: C
 
 # Funciones para obtener datos de APIs
 @st.cache_data(ttl=3600)  # Cache por 1 hora
-def obtener_indicadores_economicos(indicador, año='2025'):
+def obtener_indicadores_economicos(indicador, año='2024'):
     """Obtiene indicadores económicos desde mindicador.cl"""
     try:
         url = f'https://mindicador.cl/api/{indicador}/{año}'
@@ -181,7 +181,7 @@ elif seccion == "💰 Indicadores Económicos":
         )
     
     with col2:
-        año = st.selectbox("Año:", ["2025", "2024", "2023", "2022"])
+        año = st.selectbox("Año:", ["2024", "2023", "2022", "2021"])
     
     with col3:
         tipo_grafico = st.selectbox("Tipo de gráfico:", ["Línea", "Area", "Barras"])
